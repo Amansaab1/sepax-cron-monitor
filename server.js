@@ -9,11 +9,10 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // MongoDB Connection
-const MONGODB_URI = 'mongodb+srv://Sepax7373737:sepax%409988@cluster0.3dbw30p.mongodb.net/sepax-cron?retryWrites=true&w=majority';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://Sepax7373737:sepax%409988@cluster0.3dbw30p.mongodb.net/sepax-cron?retryWrites=true&w=majority';
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public'));
 
 // Monitor Schema
 const monitorSchema = new mongoose.Schema({
@@ -126,10 +125,19 @@ app.put('/api/update/:id', async (req, res) => {
 
 app.get('/ping', (req, res) => res.json({ status: 'alive' }));
 
-// Serve HTML
+// Serve HTML - This is the fixed part
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// For any other route, send the HTML
 app.get('*', (req, res) => {
-  res.send(`
-<!DOCTYPE html>
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Create a separate HTML file
+const fs = require('fs');
+const htmlContent = `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -228,15 +236,15 @@ function render(monitors){
     const search=document.getElementById('searchInput').value.toLowerCase();
     const filtered=monitors.filter(m=>m.url.toLowerCase().includes(search));
     if(!filtered.length){document.getElementById('tableBody').innerHTML='<tr><td colspan="5">No monitors</td></tr>';return;}
-    document.getElementById('tableBody').innerHTML=filtered.map(m=>`
-        <tr>
-            <td style="word-break:break-all;max-width:250px;">${escapeHtml(m.url)}</td>
-            <td>${formatTime(m.lastPing)}</td>
-            <td><span class="${m.status==='Active'?'status-active':'status-down'}"><i class="fas fa-circle" style="font-size:8px;"></i> ${m.status}</span></td>
-            <td>${m.responseTime?m.responseTime+'ms':'-'}</td>
-            <td class="action-buttons"><i class="fas fa-edit edit-btn" data-id="${m._id}" data-url="${escapeHtml(m.url)}" data-interval="${m.interval}"></i> <i class="fas fa-trash-alt delete-btn" data-id="${m._id}"></i></td>
-        </tr>
-    `).join('');
+    document.getElementById('tableBody').innerHTML=filtered.map(m=>{
+        return '<tr>'+
+            '<td style="word-break:break-all;max-width:250px;">'+escapeHtml(m.url)+'</td>'+
+            '<td>'+formatTime(m.lastPing)+'</td>'+
+            '<td><span class="'+(m.status==='Active'?'status-active':'status-down')+'"><i class="fas fa-circle" style="font-size:8px;"></i> '+m.status+'</span></td>'+
+            '<td>'+(m.responseTime?m.responseTime+'ms':'-')+'</td>'+
+            '<td class="action-buttons"><i class="fas fa-edit edit-btn" data-id="'+m._id+'" data-url="'+escapeHtml(m.url)+'" data-interval="'+m.interval+'"></i> <i class="fas fa-trash-alt delete-btn" data-id="'+m._id+'"></i></td>'+
+            '</tr>';
+    }).join('');
     document.querySelectorAll('.delete-btn').forEach(btn=>btn.addEventListener('click',()=>deleteMon(btn.dataset.id)));
     document.querySelectorAll('.edit-btn').forEach(btn=>btn.addEventListener('click',()=>editMon(btn.dataset.id,btn.dataset.url,btn.dataset.interval)));
 }
@@ -285,9 +293,11 @@ setInterval(fetchData,15000);
 function escapeHtml(s){if(!s)return '';return s.replace(/[&<>]/g,function(m){if(m==='&')return'&amp;';if(m==='<')return'&lt;';if(m==='>')return'&gt;';return m;});}
 </script>
 </body>
-</html>
-  `);
-});
+</html>`;
+
+// Write HTML file
+fs.writeFileSync(path.join(__dirname, 'index.html'), htmlContent);
+console.log('✅ HTML file created');
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
